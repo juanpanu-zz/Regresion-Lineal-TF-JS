@@ -1,18 +1,3 @@
-/*
-
-{
-  "IngresoPromedioZona": 79545.45857,
-    "EdadPromedioZona": 5.682861322,
-    "NumeroDeCuartosPromedio": 7.009188143,
-    "NumeroRecamarasPromedio": 4.09,
-    "PoblacionZona": 23086.8005,
-    "Precio": 1059033.558,
-    "Direccion": "No disponible"
-}
-
-*/
-
-var stopTraining;
 
 async function getData() {
     const datosCasasR = await fetch('https://static.platzi.com/media/public/uploads/datos-entrenamiento_15cd99ce-3561-494e-8f56-9492d4e86438.json');
@@ -26,62 +11,6 @@ async function getData() {
     return datosLimpios;
   }
 
-  //mostrar curva de inferencia()
-async function verCurvaInferencia(){
-  var data = await getData();
-  var tensorData = await convertirDatosATensores(data);
-
-  const { entradasMax, entradasMin, etiquetasMin, etiquetasMax} = tensorData;
-
-  const [xs, preds] = tf.tidy(() => {
-    const xs = tf.linspace(0,1,100);
-    const preds = modelo.predict(xs.reshape([100,1]));
-
-    // (dato -min) / (max-min)  --> normalizar
-    // dato = (max - min) + min --> desnormalizar
-
-    const desnormX = xs
-      .mul(entradasMax.sub(entradasMin))
-      .add(entradasMin)
-
-      const desnormY = preds
-      .mul(etiquetasMax.sub(etiquetasMin))
-      .add(etiquetasMin)
-
-      return [desnormX.dataSync(), desnormY.dataSync()];
-
-  });
-
-  const puntosPrediccion = Array.from(xs).map((val, i) => {
-    return {x: val, y: preds[i]}
-  });
-
-  const puntosOriginales = data.map(d => ({
-    x: d.cuartos, y: d.precio,
-  }));
-
-  tfvis.render.scatterplot(
-    { name: 'Prediction vs Original values' },
-    { values: [puntosOriginales, puntosPrediccion], series: ['original values','predictions']},
-    {
-      xLabel: 'Rooms',
-      yLabel: 'Price',
-      height: 300
-    }
-  );
-
-}
-
-async function cargarModelo(){
-  const uploadJSONInput = document.getElementById('upload-json');
-  const uploadWeightsInput = document.getElementById('upload-weights');
-
-  modelo = await tf.loadLayersModel(tf.io.browserFiles(
-    [uploadJSONInput.files[0], uploadWeightsInput.files[0]]
-  ));
-  console.log("Modelo Cargado");
-}
-
   function visualizarDatos(data){
     const valores = data.map(d => ({
       x: d.cuartos,
@@ -89,13 +18,12 @@ async function cargarModelo(){
     }));
 
     tfvis.render.scatterplot(
-      {name: 'Room vs Price'},
+      {name: 'Cuartos vs Precio'},
       {values: valores},
       {
-        xLabel: 'Rooms',
-        yLabel: 'Price',
-        height: 300,
-        
+        xLabel: 'Cuartos',
+        yLabel: 'Precio',
+        height: 300
       }
     );
   }
@@ -124,6 +52,7 @@ async function entrenarModelo(model, inputs, labels) {
     metrics: metricas,
   });
 
+  // hiperparámetros
   const surface = { name: 'show.history live', tab: 'Training' };
   const tamanioBatch = 28;
   const epochs = 50;
@@ -133,23 +62,14 @@ async function entrenarModelo(model, inputs, labels) {
     tamanioBatch,
     epochs,
     shuffle: true,
-    callbacks: {
-      onEpochEnd: (epoch, log) => {
-        history.push(log);
-        tfvis.show.history(surface, history,  ['loss', 'mse']);
-
-        if(stopTraining){
-          modelo.stopTraining = true;
-        }
-      }
-    }
+    callbacks: tfvis.show.fitCallbacks(
+      { name: 'Training Performance' },
+      ['loss', 'mse'],
+      { height: 200, callbacks: ['onEpochEnd'] }
+    )
   });
 }
 
-async function guardarModelo(){
-    const saveResult = await modelo.save('downloads://modelo-regresion');
-
-}
 
 function convertirDatosATensores(data){
   return tf.tidy(() => {
@@ -158,9 +78,13 @@ function convertirDatosATensores(data){
     const entradas = data.map(d => d.cuartos)
     const etiquetas = data.map(d => d.precio);
 
+    //console.log('entradas:', entradas);
+    //console.log('entradas.length:', entradas.length);
+
     const tensorEntradas = tf.tensor2d(entradas, [entradas.length, 1]);
     const tensorEtiquetas = tf.tensor2d(etiquetas, [etiquetas.length, 1]);
 
+    // normalización
 
     const entradasMax = tensorEntradas.max();
     const entradasMin = tensorEntradas.min();
@@ -200,5 +124,13 @@ async function run() {
 
 }
 
+//run();
 
-run();
+async function test(){
+
+  const data = await getData();
+  const tensorData = convertirDatosATensores(data);
+
+}
+
+test()
